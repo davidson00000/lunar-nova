@@ -1472,3 +1472,136 @@ body.light-theme .config-input {
     padding: var(--spacing-xs) var(--spacing-md);
     font-size: var(--font-size-xs);
 }
+
+/* ===== Responsive Mobile Fixes ===== */
+@media (max-width: 768px) {
+    /* Container adjustment */
+    .app-container {
+        padding: var(--spacing-sm);
+    }
+    
+    /* Header optimizations */
+    .app-header {
+        padding: var(--spacing-md);
+        margin-bottom: var(--spacing-lg);
+    }
+    
+    .header-content {
+        flex-direction: column;
+        gap: var(--spacing-md);
+        align-items: stretch;
+    }
+    
+    .logo {
+        justify-content: center;
+    }
+    
+    .header-actions {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: var(--spacing-xs);
+        width: 100%;
+    }
+    
+    .header-actions .btn {
+        width: 100%;
+        justify-content: center;
+        padding: var(--spacing-sm);
+        font-size: var(--font-size-xs);
+    }
+    
+    /* Use icons only for some buttons to save space */
+    #exportBtn, #importBtn {
+        font-size: 0; 
+    }
+    
+    #exportBtn .btn-icon, #importBtn .btn-icon {
+        font-size: var(--font-size-lg);
+        margin-right: 0;
+    }
+    
+    #newProjectBtn {
+        grid-column: span 3; /* Full width for new project */
+    }
+
+    /* Dashboard Stats - 2 columns */
+    .dashboard-stats {
+        grid-template-columns: 1fr 1fr;
+        gap: var(--spacing-sm);
+    }
+    
+    /* Editor Layout - Stack Vertical */
+    .editor-layout {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-md);
+        min-height: auto;
+    }
+    
+    .editor-container {
+        padding: var(--spacing-md);
+    }
+    
+    /* Editor Header adjustments */
+    .editor-header {
+        flex-direction: column;
+        gap: var(--spacing-md);
+        align-items: stretch;
+    }
+    
+    .editor-actions {
+        justify-content: space-between;
+        width: 100%;
+    }
+    
+    /* Shorten 'Back to Dashboard' text on mobile using ::after content replacement trick or just simple hiding */
+    #backBtn {
+        font-size: 0; /* Hide text */
+        width: 100%;
+        justify-content: center;
+    }
+    
+    #backBtn::after {
+        content: "戻る";
+        font-size: var(--font-size-sm);
+        margin-left: var(--spacing-xs);
+    }
+    
+    #backBtn .btn-icon {
+        font-size: var(--font-size-base);
+        margin-right: 0;
+    }
+    
+    /* Meta inputs stacking */
+    .meta-row {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+
+    .title-input {
+        font-size: var(--font-size-xl);
+        padding: var(--spacing-sm) 0;
+    }
+    
+    /* Preview adjustments */
+    .preview-pane.fullscreen {
+        padding: var(--spacing-md);
+    }
+    
+    .markdown-content ul,
+    .markdown-content ol {
+        padding-left: 1.5rem; /* Ensure bullets are visible but not huge indent */
+        margin-left: 0;
+    }
+    
+    /* Fix for list item wrapping */
+    .markdown-content li {
+        white-space: normal;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Modal adjustments */
+    .modal-content {
+        width: 95%;
+        padding: var(--spacing-lg);
+    }
+}
