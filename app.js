@@ -68,6 +68,7 @@ async function initFirebase() {
 function initializeEventListeners() {
     // Navigation
     document.getElementById('newProjectBtn').addEventListener('click', () => showEditor());
+    document.getElementById('createFirstProjectBtn').addEventListener('click', () => showEditor());
     document.getElementById('backBtn').addEventListener('click', () => showDashboard());
 
     // Editor actions
