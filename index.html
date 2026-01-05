@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lunar Nova - Markdownプロジェクト管理</title>
+    <meta name="description" content="Markdownベースのモダンなプロジェクト管理ツール">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- DOMPurify for XSS protection -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- Background Animation -->
+    <div class="background-animation">
+        <div class="gradient-orb orb-1"></div>
+        <div class="gradient-orb orb-2"></div>
+        <div class="gradient-orb orb-3"></div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-icon">🌙</div>
+                    <h1>Lunar Nova</h1>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-icon-text" id="themeToggle" title="テーマ切替">
+                        <span class="btn-icon">🌙</span>
+                    </button>
+                    <button class="btn btn-secondary" id="syncBtn" title="クラウド同期">
+                        <span class="btn-icon">☁️</span>
+                        <span class="sync-status">同期</span>
+                    </button>
+                    <div class="dropdown">
+                        <button class="btn btn-secondary" id="exportBtn">
+                            <span class="btn-icon">📥</span>
+                            エクスポート
+                        </button>
+                        <div class="dropdown-menu" id="exportMenu">
+                            <button class="dropdown-item" id="exportAllJson">全てをJSON形式</button>
+                            <button class="dropdown-item" id="exportAllMarkdown">全てをMarkdown形式</button>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary" id="importBtn">
+                        <span class="btn-icon">📤</span>
+                        インポート
+                    </button>
+                    <input type="file" id="importFile" accept=".json" style="display: none;">
+                    <button class="btn btn-primary" id="newProjectBtn">
+                        <span class="btn-icon">✨</span>
+                        新規プロジェクト
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard View -->
+            <div id="dashboardView" class="view active">
+                <div class="dashboard-header">
+                    <h2>プロジェクト一覧</h2>
+
+                    <!-- Search and Filter Controls -->
+                    <div class="controls-row">
+                        <div class="search-box">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="searchInput" placeholder="プロジェクトを検索..." class="search-input">
+                            <button class="clear-search" id="clearSearch" style="display: none;">×</button>
+                        </div>
+
+                        <div class="filter-controls">
+                            <select id="statusFilter" class="filter-select">
+                                <option value="">全ステータス</option>
+                                <option value="planning">計画中</option>
+                                <option value="active">進行中</option>
+                                <option value="completed">完了</option>
+                                <option value="on-hold">保留</option>
+                                <option value="archived">アーカイブ</option>
+                            </select>
+
+                            <select id="sortBy" class="filter-select">
+                                <option value="updated-desc">更新日時（新しい順）</option>
+                                <option value="updated-asc">更新日時（古い順）</option>
+                                <option value="created-desc">作成日時（新しい順）</option>
+                                <option value="created-asc">作成日時（古い順）</option>
+                                <option value="title-asc">タイトル（A-Z）</option>
+                                <option value="title-desc">タイトル（Z-A）</option>
+                                <option value="status">ステータス順</option>
+                            </select>
+
+                            <button class="btn btn-icon-only" id="toggleArchived" title="アーカイブを表示/非表示">
+                                <span>📦</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-stats">
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalProjects">0</div>
+                            <div class="stat-label">総プロジェクト</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="activeProjects">0</div>
+                            <div class="stat-label">進行中</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="completedProjects">0</div>
+                            <div class="stat-label">完了</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="archivedProjects">0</div>
+                            <div class="stat-label">アーカイブ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="projects-grid" id="projectsGrid">
+                    <!-- Projects will be rendered here -->
+                </div>
+
+                <!-- Empty State -->
+                <div class="empty-state" id="emptyState">
+                    <div class="empty-icon">📝</div>
+                    <h3>プロジェクトがありません</h3>
+                    <p>新しいプロジェクトを作成して始めましょう</p>
+                    <button class="btn btn-primary" onclick="showEditor()">
+                        <span class="btn-icon">✨</span>
+                        最初のプロジェクトを作成
+                    </button>
+                </div>
+            </div>
+
+            <!-- Editor View -->
+            <div id="editorView" class="view">
+                <div class="editor-container">
+                    <div class="editor-header">
+                        <button class="btn btn-ghost" id="backBtn">
+                            <span class="btn-icon">←</span>
+                            ダッシュボードに戻る
+                        </button>
+                        <div class="editor-actions">
+                            <button class="btn btn-secondary" id="editModeToggle">
+                                <span class="btn-icon">✏️</span>
+                                <span id="editModeText">編集モード</span>
+                            </button>
+                            <button class="btn btn-success" id="saveBtn">
+                                <span class="btn-icon">💾</span>
+                                保存
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="editor-meta">
+                        <input type="text" id="projectTitle" placeholder="プロジェクト名を入力..." class="title-input">
+                        <div class="meta-row">
+                            <select id="projectStatus" class="status-select">
+                                <option value="planning">計画中</option>
+                                <option value="active">進行中</option>
+                                <option value="completed">完了</option>
+                                <option value="on-hold">保留</option>
+                                <option value="archived">アーカイブ</option>
+                            </select>
+                            <input type="text" id="projectTags" placeholder="タグ（カンマ区切り）" class="tags-input">
+                        </div>
+                    </div>
+
+                    <div class="editor-layout">
+                        <div class="editor-pane" id="editorPane">
+                            <div class="pane-header">
+                                <h3>Markdown編集</h3>
+                                <div class="markdown-help">
+                                    <button class="btn-icon-only" id="helpBtn">?</button>
+                                </div>
+                            </div>
+                            <textarea id="markdownEditor" placeholder="Markdownでプロジェクトの詳細を入力...
+
+## プロジェクト概要
+
+### 目的
+プロジェクトの目的を記述
+
+### タスク
+- [ ] タスク1
+- [ ] タスク2
+- [x] 完了したタスク
+
+### メモ
+追加のメモや詳細を記述"></textarea>
+                        </div>
+
+                        <div class="preview-pane" id="previewPane">
+                            <div class="pane-header">
+                                <h3>プレビュー</h3>
+                            </div>
+                            <div id="markdownPreview" class="markdown-content">
+                                <p class="preview-placeholder">ここにプレビューが表示されます</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Markdown Help Modal -->
+    <div class="modal" id="helpModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Markdown クイックリファレンス</h3>
+                <button class="modal-close" id="closeHelp">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="help-section">
+                    <h4>見出し</h4>
+                    <code># 見出し1<br>## 見出し2<br>### 見出し3</code>
+                </div>
+                <div class="help-section">
+                    <h4>リスト</h4>
+                    <code>- 箇条書き<br>1. 番号付きリスト<br>- [ ] チェックボックス</code>
+                </div>
+                <div class="help-section">
+                    <h4>装飾</h4>
+                    <code>**太字**<br>*斜体*<br>`コード`</code>
+                </div>
+                <div class="help-section">
+                    <h4>リンク・画像</h4>
+                    <code>[リンクテキスト](URL)<br>![画像](URL)</code>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal" id="deleteModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>プロジェクトを削除</h3>
+                <button class="modal-close" id="closeDelete">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>このプロジェクトを削除してもよろしいですか？</p>
+                <p class="warning-text">この操作は元に戻せません。</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="cancelDelete">キャンセル</button>
+                <button class="btn btn-danger" id="confirmDelete">削除する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Configuration Modal -->
+    <div class="modal" id="firebaseModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Firebase設定</h3>
+                <button class="modal-close" id="closeFirebase">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Firebaseを使用してクラウド同期を有効にします。</p>
+                <div class="form-group">
+                    <label>API Key</label>
+                    <input type="text" id="firebaseApiKey" class="config-input" placeholder="AIza...">
+                </div>
+                <div class="form-group">
+                    <label>Project ID</label>
+                    <input type="text" id="firebaseProjectId" class="config-input" placeholder="your-project-id">
+                </div>
+                <div class="form-group">
+                    <label>Auth Domain</label>
+                    <input type="text" id="firebaseAuthDomain" class="config-input"
+                        placeholder="your-project.firebaseapp.com">
+                </div>
+                <div class="sync-info">
+                    <p><strong>注意:</strong> Firebase設定を保存すると、プロジェクトデータが自動的にクラウドと同期されます。</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="cancelFirebase">キャンセル</button>
+                <button class="btn btn-primary" id="saveFirebase">保存して同期</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Confirmation Modal -->
+    <div class="modal" id="importModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>インポート確認</h3>
+                <button class="modal-close" id="closeImport">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="importMessage"></p>
+                <div class="import-options">
+                    <label>
+                        <input type="radio" name="importMode" value="merge" checked>
+                        既存のプロジェクトとマージ
+                    </label>
+                    <label>
+                        <input type="radio" name="importMode" value="replace">
+                        既存のプロジェクトを置き換え
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="cancelImport">キャンセル</button>
+                <button class="btn btn-primary" id="confirmImport">インポート</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
