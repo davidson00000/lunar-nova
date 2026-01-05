@@ -1425,3 +1425,50 @@ body.light-theme .config-input {
     border-bottom: 2px solid rgba(255, 255, 255, 0.1);
     padding: var(--spacing-lg) 0;
 }
+
+/* ===== Sync ID Styles ===== */
+.sync-id-container {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.sync-id-container input {
+    flex: 1;
+    font-family: monospace;
+    font-size: var(--font-size-sm);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.divider {
+    text-align: center;
+    margin: var(--spacing-lg) 0;
+    position: relative;
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 40%;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.divider::before { left: 0; }
+.divider::after { right: 0; }
+
+.input-hint {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    margin-top: var(--spacing-xs);
+}
+
+.btn-sm {
+    padding: var(--spacing-xs) var(--spacing-md);
+    font-size: var(--font-size-xs);
+}

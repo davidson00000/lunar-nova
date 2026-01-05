@@ -48,12 +48,21 @@ async function initFirebase() {
         db = firebase.firestore();
         auth = firebase.auth();
 
-        // Sign in anonymously
-        const userCredential = await auth.signInAnonymously();
-        currentUser = userCredential.user;
-        isFirebaseInitialized = true;
+        // 以前設定した手動IDがあるか確認
+        const manualUid = localStorage.getItem('lunar-nova-manual-uid');
 
-        console.log("Firebase initialized. User ID:", currentUser.uid);
+        if (manualUid) {
+            // 手動IDを現在のユーザーとして扱う（認証は通さずドキュメントアクセスのみ）
+            currentUser = { uid: manualUid };
+            console.log("Using manual Sync ID:", manualUid);
+        } else {
+            // 新規匿名ログイン
+            const userCredential = await auth.signInAnonymously();
+            currentUser = userCredential.user;
+            console.log("Using anonymous ID:", currentUser.uid);
+        }
+
+        isFirebaseInitialized = true;
 
         // Initial sync from cloud
         await syncFromFirebase(true);
@@ -214,31 +223,37 @@ function updateSyncButtonUI(syncing) {
 
 function updateSyncIdUI() {
     const apiKeyField = document.getElementById('firebaseApiKey');
-    const projectIdField = document.getElementById('firebaseProjectId');
-    const authDomainField = document.getElementById('firebaseAuthDomain');
-    const saveBtn = document.getElementById('saveFirebase');
-
-    document.querySelector('#firebaseModal h3').textContent = 'クラウド同期（Sync ID）';
-    document.querySelector('#firebaseModal .modal-body p').textContent = 'この ID を使用して、他のデバイスとデータを共有できます。';
+    const manualSyncField = document.getElementById('manualSyncId');
 
     apiKeyField.value = currentUser ? currentUser.uid : 'Initializing...';
-    apiKeyField.readOnly = true;
-
-    // Repurpose other fields for information
-    projectIdField.parentElement.style.display = 'none';
-    authDomainField.parentElement.style.display = 'none';
-
-    saveBtn.textContent = 'Sync ID をコピー';
+    manualSyncField.value = localStorage.getItem('lunar-nova-manual-uid') || '';
 }
 
-function handleSyncIdAction() {
-    const uid = currentUser ? currentUser.uid : '';
-    if (uid) {
-        navigator.clipboard.writeText(uid);
-        showNotification('Sync ID をコピーしました');
+async function handleSyncIdAction() {
+    const manualId = document.getElementById('manualSyncId').value.trim();
+
+    if (manualId) {
+        // 保存して再読み込み
+        localStorage.setItem('lunar-nova-manual-uid', manualId);
+        showNotification('Sync ID を適用しました。再読み込み中...');
+        setTimeout(() => location.reload(), 1500);
+    } else {
+        showNotification('ID を入力してください');
     }
-    hideModal('firebaseModal');
 }
+
+// コピーボタンの処理
+document.addEventListener('DOMContentLoaded', () => {
+    const copyBtn = document.getElementById('copySyncIdBtn');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+            const apiKeyField = document.getElementById('firebaseApiKey');
+            apiKeyField.select();
+            navigator.clipboard.writeText(apiKeyField.value);
+            showNotification('Sync ID をコピーしました');
+        });
+    }
+});
 
 // ===== Local Storage Functions =====
 function loadLocalProjects() {

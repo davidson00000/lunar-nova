@@ -274,25 +274,25 @@
             <div class="modal-body">
                 <p>Firebaseを使用してクラウド同期を有効にします。</p>
                 <div class="form-group">
-                    <label>API Key</label>
-                    <input type="text" id="firebaseApiKey" class="config-input" placeholder="AIza...">
+                    <label>あなたの Sync ID (このデバイス)</label>
+                    <div class="sync-id-container">
+                        <input type="text" id="firebaseApiKey" class="config-input" readonly>
+                        <button class="btn btn-secondary btn-sm" id="copySyncIdBtn">コピー</button>
+                    </div>
                 </div>
+                <div class="divider">または</div>
                 <div class="form-group">
-                    <label>Project ID</label>
-                    <input type="text" id="firebaseProjectId" class="config-input" placeholder="your-project-id">
-                </div>
-                <div class="form-group">
-                    <label>Auth Domain</label>
-                    <input type="text" id="firebaseAuthDomain" class="config-input"
-                        placeholder="your-project.firebaseapp.com">
+                    <label>他のデバイスと同期する (Sync ID を入力)</label>
+                    <input type="text" id="manualSyncId" class="config-input" placeholder="他のデバイスの ID を入力...">
+                    <p class="input-hint">入力すると、そのデバイスのデータが表示されるようになります。</p>
                 </div>
                 <div class="sync-info">
-                    <p><strong>注意:</strong> Firebase設定を保存すると、プロジェクトデータが自動的にクラウドと同期されます。</p>
+                    <p><strong>注意:</strong> 同期すると現在のローカルデータはクラウドのデータで上書きされます。</p>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-ghost" id="cancelFirebase">キャンセル</button>
-                <button class="btn btn-primary" id="saveFirebase">保存して同期</button>
+                <button class="btn btn-primary" id="saveFirebase">ID を適用して同期</button>
             </div>
         </div>
     </div>
