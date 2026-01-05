@@ -1,7 +1,7 @@
 // ===== State Management =====
 let projects = [];
 let currentProject = null;
-let isEditMode = false; // false=プレビューのみ, true=編集モード
+let isEditMode = false;
 let showArchived = false;
 let searchQuery = '';
 let statusFilter = '';
@@ -9,17 +9,60 @@ let sortBy = 'updated-desc';
 let pendingImportData = null;
 
 // Firebase configuration
-let firebaseConfig = null;
-let firebaseInitialized = false;
+const defaultFirebaseConfig = {
+    apiKey: "AIzaSyD2eFoJ7qDEQbHd2YVcPx6xGEushmN1vVk",
+    authDomain: "lunar-nova-1223e.firebaseapp.com",
+    projectId: "lunar-nova-1223e",
+    storageBucket: "lunar-nova-1223e.firebasestorage.app",
+    messagingSenderId: "1029952234254",
+    appId: "1:1029952234254:web:e072800db543acf0966d5f",
+    measurementId: "G-LYKP24CH76"
+};
+
+let db = null;
+let auth = null;
+let currentUser = null;
+let isFirebaseInitialized = false;
 
 // ===== Initialize App =====
-document.addEventListener('DOMContentLoaded', () => {
-    loadProjects();
-    loadFirebaseConfig();
-    loadThemePreference();
+document.addEventListener('DOMContentLoaded', async () => {
+    loadLocalProjects();
     initializeEventListeners();
+    loadThemePreference();
     renderDashboard();
+
+    // Initialize Firebase
+    await initFirebase();
 });
+
+async function initFirebase() {
+    try {
+        if (!window.firebase) {
+            console.warn("Firebase SDK not found.");
+            updateSyncButtonUI(false);
+            return;
+        }
+
+        // Initialize Firebase
+        firebase.initializeApp(defaultFirebaseConfig);
+        db = firebase.firestore();
+        auth = firebase.auth();
+
+        // Sign in anonymously
+        const userCredential = await auth.signInAnonymously();
+        currentUser = userCredential.user;
+        isFirebaseInitialized = true;
+
+        console.log("Firebase initialized. User ID:", currentUser.uid);
+
+        // Initial sync from cloud
+        await syncFromFirebase(true);
+
+    } catch (error) {
+        console.error("Firebase initialization failed:", error);
+        updateSyncButtonUI(false);
+    }
+}
 
 // ===== Event Listeners =====
 function initializeEventListeners() {
@@ -50,55 +93,165 @@ function initializeEventListeners() {
     document.getElementById('importFile').addEventListener('change', handleImport);
 
     // Firebase sync
-    document.getElementById('syncBtn').addEventListener('click', handleSync);
+    document.getElementById('syncBtn').addEventListener('click', () => {
+        if (!isFirebaseInitialized) {
+            initFirebase();
+        } else {
+            showModal('firebaseModal');
+            updateSyncIdUI();
+        }
+    });
+
     document.getElementById('closeFirebase').addEventListener('click', () => hideModal('firebaseModal'));
     document.getElementById('cancelFirebase').addEventListener('click', () => hideModal('firebaseModal'));
-    document.getElementById('saveFirebase').addEventListener('click', saveFirebaseConfig);
+    document.getElementById('saveFirebase').addEventListener('click', handleSyncIdAction);
 
-    // Import modal
-    document.getElementById('closeImport').addEventListener('click', () => hideModal('importModal'));
-    document.getElementById('cancelImport').addEventListener('click', () => hideModal('importModal'));
-    document.getElementById('confirmImport').addEventListener('click', confirmImport);
-
-    // Help modal
-    document.getElementById('helpBtn').addEventListener('click', () => showModal('helpModal'));
-    document.getElementById('closeHelp').addEventListener('click', () => hideModal('helpModal'));
-
-    // Delete modal
+    // Modal close hooks
     document.getElementById('closeDelete').addEventListener('click', () => hideModal('deleteModal'));
     document.getElementById('cancelDelete').addEventListener('click', () => hideModal('deleteModal'));
     document.getElementById('confirmDelete').addEventListener('click', confirmDelete);
 
-    // Close modal on background click
+    document.getElementById('closeImport').addEventListener('click', () => hideModal('importModal'));
+    document.getElementById('cancelImport').addEventListener('click', () => hideModal('importModal'));
+    document.getElementById('confirmImport').addEventListener('click', confirmImport);
+
+    document.getElementById('helpBtn').addEventListener('click', () => showModal('helpModal'));
+    document.getElementById('closeHelp').addEventListener('click', () => hideModal('helpModal'));
+
+    // Global listeners
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                hideModal(modal.id);
-            }
+            if (e.target === modal) hideModal(modal.id);
         });
     });
 
-    // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.dropdown')) {
-            document.querySelectorAll('.dropdown-menu').forEach(menu => {
-                menu.classList.remove('show');
-            });
+            document.querySelectorAll('.dropdown-menu').forEach(menu => menu.classList.remove('show'));
         }
     });
 }
 
+// ===== Cloud Sync Logic =====
+
+async function syncToFirebase() {
+    if (!isFirebaseInitialized || !currentUser) return;
+
+    updateSyncButtonUI(true);
+    try {
+        const userDocRef = db.collection('users').doc(currentUser.uid);
+        await userDocRef.set({
+            projects: projects,
+            lastUpdated: new Date().toISOString()
+        }, { merge: true });
+        console.log("Synced to cloud.");
+        updateSyncButtonUI(false);
+    } catch (error) {
+        console.error("Cloud sync failed:", error);
+        updateSyncButtonUI(false);
+        showNotification('クラウド同期に失敗しました');
+    }
+}
+
+async function syncFromFirebase(silent = false) {
+    if (!isFirebaseInitialized || !currentUser) return;
+
+    if (!silent) updateSyncButtonUI(true);
+    try {
+        const userDocRef = db.collection('users').doc(currentUser.uid);
+        const doc = await userDocRef.get();
+
+        if (doc.exists) {
+            const data = doc.data();
+            if (data.projects) {
+                // Determine if we should update local data
+                // In this simple version, we prefer the cloud data if it has projects
+                // but let's do a simple merge for existing local projects that might not be in the cloud
+                const cloudProjects = data.projects;
+                const localProjects = projects;
+
+                // Simple strategy: Cloud wins for MVP
+                if (cloudProjects.length > 0 || localProjects.length === 0) {
+                    projects = cloudProjects;
+                    saveLocalProjectsOnly();
+                    renderDashboard();
+                } else if (localProjects.length > 0) {
+                    // Upload local projects to cloud if cloud is empty
+                    await syncToFirebase();
+                }
+            }
+        } else {
+            // New user, push local projects to cloud
+            if (projects.length > 0) {
+                await syncToFirebase();
+            }
+        }
+
+        if (!silent) showNotification('クラウドから同期しました');
+    } catch (error) {
+        console.error("Cloud fetch failed:", error);
+        if (!silent) showNotification('クラウドデータの取得に失敗しました');
+    } finally {
+        updateSyncButtonUI(false);
+    }
+}
+
+function updateSyncButtonUI(syncing) {
+    const btn = document.getElementById('syncBtn');
+    if (!btn) return;
+    const statusText = btn.querySelector('.sync-status');
+    const icon = btn.querySelector('.btn-icon');
+
+    if (syncing) {
+        statusText.textContent = '同期中...';
+        icon.classList.add('syncing-animation');
+    } else {
+        statusText.textContent = isFirebaseInitialized ? '同期済' : '同期';
+        icon.classList.remove('syncing-animation');
+    }
+}
+
+function updateSyncIdUI() {
+    const apiKeyField = document.getElementById('firebaseApiKey');
+    const projectIdField = document.getElementById('firebaseProjectId');
+    const authDomainField = document.getElementById('firebaseAuthDomain');
+    const saveBtn = document.getElementById('saveFirebase');
+
+    document.querySelector('#firebaseModal h3').textContent = 'クラウド同期（Sync ID）';
+    document.querySelector('#firebaseModal .modal-body p').textContent = 'この ID を使用して、他のデバイスとデータを共有できます。';
+
+    apiKeyField.value = currentUser ? currentUser.uid : 'Initializing...';
+    apiKeyField.readOnly = true;
+
+    // Repurpose other fields for information
+    projectIdField.parentElement.style.display = 'none';
+    authDomainField.parentElement.style.display = 'none';
+
+    saveBtn.textContent = 'Sync ID をコピー';
+}
+
+function handleSyncIdAction() {
+    const uid = currentUser ? currentUser.uid : '';
+    if (uid) {
+        navigator.clipboard.writeText(uid);
+        showNotification('Sync ID をコピーしました');
+    }
+    hideModal('firebaseModal');
+}
+
 // ===== Local Storage Functions =====
-function loadProjects() {
+function loadLocalProjects() {
     const stored = localStorage.getItem('lunar-nova-projects');
     projects = stored ? JSON.parse(stored) : [];
 }
 
-function saveProjects() {
+function saveLocalProjectsOnly() {
     localStorage.setItem('lunar-nova-projects', JSON.stringify(projects));
+}
 
-    // Auto-sync if Firebase is configured
-    if (firebaseInitialized) {
+function saveProjects() {
+    saveLocalProjectsOnly();
+    if (isFirebaseInitialized) {
         syncToFirebase();
     }
 }
@@ -130,14 +283,11 @@ function renderDashboard() {
     const grid = document.getElementById('projectsGrid');
     const emptyState = document.getElementById('emptyState');
 
-    // Update stats
     updateStats();
 
-    // Filter and sort projects
     let filteredProjects = filterProjects();
     filteredProjects = sortProjects(filteredProjects);
 
-    // Show empty state or projects
     if (filteredProjects.length === 0 && projects.length === 0) {
         grid.innerHTML = '';
         emptyState.classList.add('show');
@@ -148,118 +298,73 @@ function renderDashboard() {
         emptyState.classList.remove('show');
         grid.innerHTML = filteredProjects.map(project => createProjectCard(project)).join('');
 
-        // Add event listeners to project cards
+        // Re-attach event listeners to new elements
         filteredProjects.forEach((project, index) => {
             const card = grid.children[index];
             card.addEventListener('click', (e) => {
                 if (!e.target.closest('.action-btn')) {
-                    viewProject(project); // プレビューモードで開く
+                    viewProject(project);
                 }
             });
 
-            // Edit button - 編集モードで開く
             const editBtn = card.querySelector('.action-btn.edit');
-            if (editBtn) {
-                editBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    editProject(project); // 編集モードで開く
-                });
-            }
+            editBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                editProject(project);
+            });
 
-            // Delete button
-            const deleteBtn = card.querySelector('.action-btn.delete');
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    deleteProject(project);
-                });
-            }
-
-            // Archive button
             const archiveBtn = card.querySelector('.action-btn.archive');
-            if (archiveBtn) {
-                archiveBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    toggleArchive(project);
-                });
-            }
+            archiveBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleArchive(project);
+            });
+
+            const deleteBtn = card.querySelector('.action-btn.delete');
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteProject(project);
+            });
         });
     }
 }
 
 function filterProjects() {
     return projects.filter(project => {
-        // Filter by archived status
-        if (!showArchived && project.status === 'archived') {
-            return false;
-        }
-
-        // Filter by status
-        if (statusFilter && project.status !== statusFilter) {
-            return false;
-        }
-
-        // Filter by search query
+        if (!showArchived && project.status === 'archived') return false;
+        if (statusFilter && project.status !== statusFilter) return false;
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
             const titleMatch = project.title.toLowerCase().includes(query);
             const contentMatch = project.content.toLowerCase().includes(query);
-            const tagsMatch = (project.tags || []).some(tag =>
-                tag.toLowerCase().includes(query)
-            );
-
-            if (!titleMatch && !contentMatch && !tagsMatch) {
-                return false;
-            }
+            const tagsMatch = (project.tags || []).some(tag => tag.toLowerCase().includes(query));
+            if (!titleMatch && !contentMatch && !tagsMatch) return false;
         }
-
         return true;
     });
 }
 
 function sortProjects(projectsList) {
     const sorted = [...projectsList];
-
     switch (sortBy) {
-        case 'updated-desc':
-            sorted.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-            break;
-        case 'updated-asc':
-            sorted.sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt));
-            break;
-        case 'created-desc':
-            sorted.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-            break;
-        case 'created-asc':
-            sorted.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-            break;
-        case 'title-asc':
-            sorted.sort((a, b) => a.title.localeCompare(b.title));
-            break;
-        case 'title-desc':
-            sorted.sort((a, b) => b.title.localeCompare(a.title));
-            break;
+        case 'updated-desc': sorted.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)); break;
+        case 'updated-asc': sorted.sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt)); break;
+        case 'created-desc': sorted.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); break;
+        case 'created-asc': sorted.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)); break;
+        case 'title-asc': sorted.sort((a, b) => a.title.localeCompare(b.title)); break;
+        case 'title-desc': sorted.sort((a, b) => b.title.localeCompare(a.title)); break;
         case 'status':
             const statusOrder = { 'planning': 0, 'active': 1, 'on-hold': 2, 'completed': 3, 'archived': 4 };
             sorted.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
             break;
     }
-
     return sorted;
 }
 
 function updateStats() {
-    const activeProjects = projects.filter(p => p.status !== 'archived');
-    document.getElementById('totalProjects').textContent = activeProjects.length;
-
-    const activeCount = projects.filter(p => p.status === 'active').length;
-    document.getElementById('activeProjects').textContent = activeCount;
-
-    const completedCount = projects.filter(p => p.status === 'completed').length;
-    document.getElementById('completedProjects').textContent = completedCount;
-
-    const archivedCount = projects.filter(p => p.status === 'archived').length;
-    document.getElementById('archivedProjects').textContent = archivedCount;
+    document.getElementById('totalProjects').textContent = projects.filter(p => p.status !== 'archived').length;
+    document.getElementById('activeProjects').textContent = projects.filter(p => p.status === 'active').length;
+    document.getElementById('completedProjects').textContent = projects.filter(p => p.status === 'completed').length;
+    document.getElementById('archivedProjects').textContent = projects.filter(p => p.status === 'archived').length;
 }
 
 function createProjectCard(project) {
@@ -268,8 +373,6 @@ function createProjectCard(project) {
     const preview = getTextPreview(project.content);
     const tags = project.tags || [];
     const isArchived = project.status === 'archived';
-    const archiveIcon = isArchived ? '📂' : '📦';
-    const archiveTitle = isArchived ? 'アーカイブ解除' : 'アーカイブ';
 
     return `
         <div class="project-card ${isArchived ? 'archived' : ''}" data-id="${project.id}">
@@ -280,7 +383,7 @@ function createProjectCard(project) {
                 </div>
                 <div class="project-actions">
                     <button class="action-btn edit" title="編集">✏️</button>
-                    <button class="action-btn archive" title="${archiveTitle}">${archiveIcon}</button>
+                    <button class="action-btn archive" title="${isArchived ? 'アーカイブ解除' : 'アーカイブ'}">${isArchived ? '📂' : '📦'}</button>
                     <button class="action-btn delete" title="削除">🗑️</button>
                 </div>
             </div>
@@ -301,8 +404,7 @@ function createProjectCard(project) {
 // ===== Search and Filter Functions =====
 function handleSearch(e) {
     searchQuery = e.target.value;
-    const clearBtn = document.getElementById('clearSearch');
-    clearBtn.style.display = searchQuery ? 'flex' : 'none';
+    document.getElementById('clearSearch').style.display = searchQuery ? 'flex' : 'none';
     renderDashboard();
 }
 
@@ -313,21 +415,11 @@ function clearSearch() {
     renderDashboard();
 }
 
-function handleStatusFilter(e) {
-    statusFilter = e.target.value;
-    renderDashboard();
-}
-
-function handleSort(e) {
-    sortBy = e.target.value;
-    renderDashboard();
-}
-
+function handleStatusFilter(e) { statusFilter = e.target.value; renderDashboard(); }
+function handleSort(e) { sortBy = e.target.value; renderDashboard(); }
 function toggleArchivedView() {
     showArchived = !showArchived;
-    const btn = document.getElementById('toggleArchived');
-    btn.style.opacity = showArchived ? '1' : '0.5';
-    btn.title = showArchived ? 'アーカイブを非表示' : 'アーカイブを表示';
+    document.getElementById('toggleArchived').style.opacity = showArchived ? '1' : '0.5';
     renderDashboard();
 }
 
@@ -335,22 +427,16 @@ function toggleArchive(project) {
     const index = projects.findIndex(p => p.id === project.id);
     if (index !== -1) {
         if (projects[index].status === 'archived') {
-            // Restore from archive - set to previous status or 'on-hold'
             projects[index].status = projects[index].previousStatus || 'on-hold';
             delete projects[index].previousStatus;
         } else {
-            // Archive - save current status
             projects[index].previousStatus = projects[index].status;
             projects[index].status = 'archived';
         }
         projects[index].updatedAt = new Date().toISOString();
         saveProjects();
         renderDashboard();
-        showNotification(
-            projects[index].status === 'archived' ?
-                'プロジェクトをアーカイブしました' :
-                'アーカイブを解除しました'
-        );
+        showNotification(projects[index].status === 'archived' ? 'プロジェクトをアーカイブしました' : 'アーカイブを解除しました');
     }
 }
 
@@ -362,14 +448,12 @@ function showEditor(project = null, editMode = false) {
     isEditMode = editMode;
 
     if (project) {
-        // Edit or view existing project
         currentProject = project;
         document.getElementById('projectTitle').value = project.title;
         document.getElementById('projectStatus').value = project.status;
         document.getElementById('projectTags').value = (project.tags || []).join(', ');
         document.getElementById('markdownEditor').value = project.content;
     } else {
-        // New project - always in edit mode
         currentProject = null;
         isEditMode = true;
         document.getElementById('projectTitle').value = '';
@@ -382,23 +466,10 @@ function showEditor(project = null, editMode = false) {
     updatePreview();
 }
 
-// プレビューモードでプロジェクトを開く
-function viewProject(project) {
-    showEditor(project, false); // editMode = false
-}
+function viewProject(p) { showEditor(p, false); }
+function editProject(p) { showEditor(p, true); }
+function toggleEditMode() { isEditMode = !isEditMode; updateEditorMode(); }
 
-// 編集モードでプロジェクトを開く
-function editProject(project) {
-    showEditor(project, true); // editMode = true
-}
-
-// 編集モード⇔プレビューモードの切り替え
-function toggleEditMode() {
-    isEditMode = !isEditMode;
-    updateEditorMode();
-}
-
-// エディターのUIを編集モードまたはプレビューモードに更新
 function updateEditorMode() {
     const layout = document.querySelector('.editor-layout');
     const editorMeta = document.querySelector('.editor-meta');
@@ -408,25 +479,19 @@ function updateEditorMode() {
     const previewPane = document.querySelector('.preview-pane');
 
     if (isEditMode) {
-        // 編集モード
         layout.classList.remove('preview-only');
         editorMeta.classList.remove('readonly');
         saveBtn.style.display = 'inline-flex';
         editModeText.textContent = 'プレビューのみ';
         editModeToggle.querySelector('.btn-icon').textContent = '👁️';
-        if (previewPane) {
-            previewPane.classList.remove('fullscreen');
-        }
+        if (previewPane) previewPane.classList.remove('fullscreen');
     } else {
-        // プレビューモード
         layout.classList.add('preview-only');
         editorMeta.classList.add('readonly');
         saveBtn.style.display = 'none';
         editModeText.textContent = '編集モード';
         editModeToggle.querySelector('.btn-icon').textContent = '✏️';
-        if (previewPane) {
-            previewPane.classList.add('fullscreen');
-        }
+        if (previewPane) previewPane.classList.add('fullscreen');
     }
 }
 
@@ -436,43 +501,18 @@ function saveProject() {
     const tagsInput = document.getElementById('projectTags').value;
     const content = document.getElementById('markdownEditor').value;
 
-    if (!title) {
-        alert('プロジェクト名を入力してください');
-        return;
-    }
+    if (!title) return alert('プロジェクト名を入力してください');
 
-    const tags = tagsInput
-        .split(',')
-        .map(tag => tag.trim())
-        .filter(tag => tag.length > 0);
-
+    const tags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
     const now = new Date().toISOString();
 
     if (currentProject) {
-        // Update existing project
         const index = projects.findIndex(p => p.id === currentProject.id);
         if (index !== -1) {
-            projects[index] = {
-                ...projects[index],
-                title,
-                status,
-                tags,
-                content,
-                updatedAt: now
-            };
+            projects[index] = { ...projects[index], title, status, tags, content, updatedAt: now };
         }
     } else {
-        // Create new project
-        const newProject = {
-            id: generateId(),
-            title,
-            status,
-            tags,
-            content,
-            createdAt: now,
-            updatedAt: now
-        };
-        projects.unshift(newProject);
+        projects.unshift({ id: generateId(), title, status, tags, content, createdAt: now, updatedAt: now });
     }
 
     saveProjects();
@@ -480,11 +520,7 @@ function saveProject() {
     showNotification('プロジェクトを保存しました');
 }
 
-function deleteProject(project) {
-    currentProject = project;
-    showModal('deleteModal');
-}
-
+function deleteProject(p) { currentProject = p; showModal('deleteModal'); }
 function confirmDelete() {
     if (currentProject) {
         const index = projects.findIndex(p => p.id === currentProject.id);
@@ -502,351 +538,122 @@ function confirmDelete() {
 function updatePreview() {
     const content = document.getElementById('markdownEditor').value;
     const preview = document.getElementById('markdownPreview');
-
     if (content.trim()) {
-        const rawHtml = marked.parse(content);
-        const cleanHtml = DOMPurify.sanitize(rawHtml);
-        preview.innerHTML = cleanHtml;
+        preview.innerHTML = DOMPurify.sanitize(marked.parse(content));
     } else {
         preview.innerHTML = '<p class="preview-placeholder">ここにプレビューが表示されます</p>';
     }
 }
 
-// ===== Export Functions =====
-function toggleDropdown(menuId) {
-    const menu = document.getElementById(menuId);
-    menu.classList.toggle('show');
-}
+// ===== Export/Import Functions =====
+function toggleDropdown(id) { document.getElementById(id).classList.toggle('show'); }
 
 function exportAllJson() {
     const dataStr = JSON.stringify(projects, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
-    const timestamp = new Date().toISOString().split('T')[0];
     link.href = url;
-    link.download = `lunar-nova-projects-${timestamp}.json`;
+    link.download = `lunar-nova-projects-${new Date().toISOString().split('T')[0]}.json`;
     link.click();
     URL.revokeObjectURL(url);
-
     toggleDropdown('exportMenu');
-    showNotification('プロジェクトをエクスポートしました');
+    showNotification('JSONを書き出しました');
 }
 
 function exportAllMarkdown() {
-    let markdown = `# Lunar Nova プロジェクト一覧\n\n`;
-    markdown += `エクスポート日時: ${new Date().toLocaleString('ja-JP')}\n\n`;
-    markdown += `---\n\n`;
-
-    projects.forEach((project, index) => {
-        markdown += `## ${index + 1}. ${project.title}\n\n`;
-        markdown += `**ステータス**: ${getStatusLabel(project.status)}\n\n`;
-
-        if (project.tags && project.tags.length > 0) {
-            markdown += `**タグ**: ${project.tags.join(', ')}\n\n`;
-        }
-
-        markdown += `**作成日**: ${new Date(project.createdAt).toLocaleString('ja-JP')}\n\n`;
-        markdown += `**最終更新**: ${new Date(project.updatedAt).toLocaleString('ja-JP')}\n\n`;
-        markdown += `### 内容\n\n${project.content}\n\n`;
-        markdown += `---\n\n`;
+    let md = `# Lunar Nova プロジェクト一覧\n\n`;
+    projects.forEach(p => {
+        md += `## ${p.title} (${getStatusLabel(p.status)})\n\n${p.content}\n\n---\n\n`;
     });
-
-    const dataBlob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(dataBlob);
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    const timestamp = new Date().toISOString().split('T')[0];
     link.href = url;
-    link.download = `lunar-nova-projects-${timestamp}.md`;
+    link.download = `lunar-nova-export.md`;
     link.click();
     URL.revokeObjectURL(url);
-
     toggleDropdown('exportMenu');
-    showNotification('Markdownファイルをエクスポートしました');
+    showNotification('Markdownを書き出しました');
 }
 
-// ===== Import Functions =====
 function handleImport(e) {
     const file = e.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = (ev) => {
         try {
-            const data = JSON.parse(event.target.result);
-
-            // Validate data structure
-            if (!Array.isArray(data)) {
-                throw new Error('Invalid data format');
-            }
-
+            const data = JSON.parse(ev.target.result);
+            if (!Array.isArray(data)) throw new Error();
             pendingImportData = data;
-
-            // Show import confirmation modal
-            const message = `${data.length}個のプロジェクトをインポートします。`;
-            document.getElementById('importMessage').textContent = message;
+            document.getElementById('importMessage').textContent = `${data.length}個のプロジェクトをインポートします。`;
             showModal('importModal');
-        } catch (error) {
-            alert('ファイルの読み込みに失敗しました。正しいJSONファイルを選択してください。');
-            console.error('Import error:', error);
+        } catch (err) {
+            alert('不正なファイル形式です');
         }
     };
-
     reader.readAsText(file);
-    e.target.value = ''; // Reset file input
+    e.target.value = '';
 }
 
 function confirmImport() {
     if (!pendingImportData) return;
-
     const mode = document.querySelector('input[name="importMode"]:checked').value;
-
-    if (mode === 'replace') {
-        projects = pendingImportData;
-    } else {
-        // Merge mode - add imported projects with new IDs if they don't exist
-        pendingImportData.forEach(importedProject => {
-            const exists = projects.some(p => p.id === importedProject.id);
-            if (!exists) {
-                projects.push(importedProject);
-            }
-        });
-    }
-
+    if (mode === 'replace') projects = pendingImportData;
+    else projects = [...projects, ...pendingImportData];
     saveProjects();
     hideModal('importModal');
     pendingImportData = null;
     renderDashboard();
-    showNotification('プロジェクトをインポートしました');
+    showNotification('インポートしました');
 }
 
-// ===== Firebase Functions =====
-function loadFirebaseConfig() {
-    const stored = localStorage.getItem('lunar-nova-firebase-config');
-    if (stored) {
-        firebaseConfig = JSON.parse(stored);
-        // Note: Actual Firebase initialization would go here
-        // For now, we just mark it as configured
-        updateSyncButton(false);
-    }
+// ===== Utils =====
+function generateId() { return Date.now().toString(36) + Math.random().toString(36).substr(2); }
+function escapeHtml(t) { const div = document.createElement('div'); div.textContent = t; return div.innerHTML; }
+function getStatusLabel(s) {
+    const labels = { 'planning': '計画中', 'active': '進行中', 'completed': '完了', 'on-hold': '保留', 'archived': 'アーカイブ' };
+    return labels[s] || s;
 }
-
-function handleSync() {
-    if (!firebaseConfig) {
-        showModal('firebaseModal');
-        return;
-    }
-
-    syncToFirebase();
+function getTextPreview(text, max = 150) {
+    let p = text.replace(/^#{1,6}\s+/gm, '').replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').replace(/\n+/g, ' ').trim();
+    return p.length > max ? p.substring(0, max) + '...' : p || '内容なし';
 }
-
-function saveFirebaseConfig() {
-    const apiKey = document.getElementById('firebaseApiKey').value.trim();
-    const projectId = document.getElementById('firebaseProjectId').value.trim();
-    const authDomain = document.getElementById('firebaseAuthDomain').value.trim();
-
-    if (!apiKey || !projectId || !authDomain) {
-        alert('すべての項目を入力してください');
-        return;
-    }
-
-    firebaseConfig = { apiKey, projectId, authDomain };
-    localStorage.setItem('lunar-nova-firebase-config', JSON.stringify(firebaseConfig));
-
-    hideModal('firebaseModal');
-
-    // Initialize Firebase and sync
-    initializeFirebase();
-    syncToFirebase();
+function getWordCount(t) { return t.length; }
+function formatDate(iso) {
+    const d = new Date(iso);
+    const diff = new Date() - d;
+    if (diff < 60000) return 'たった今';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}分前`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}時間前`;
+    return d.toLocaleDateString('ja-JP');
 }
-
-function initializeFirebase() {
-    // In a real implementation, you would initialize Firebase here
-    // For demonstration, we just mark it as initialized
-    firebaseInitialized = true;
-    showNotification('Firebase設定を保存しました');
-}
-
-function syncToFirebase() {
-    // In a real implementation, you would sync to Firebase here
-    // For demonstration, we just show a syncing state
-    updateSyncButton(true);
-
-    setTimeout(() => {
-        updateSyncButton(false);
-        showNotification('クラウドと同期しました');
-    }, 1500);
-}
-
-function updateSyncButton(syncing) {
-    const btn = document.getElementById('syncBtn');
-    const status = btn.querySelector('.sync-status');
-
-    if (syncing) {
-        status.textContent = '同期中';
-        status.classList.add('syncing');
-    } else {
-        status.textContent = firebaseConfig ? '同期済' : '同期';
-        status.classList.remove('syncing');
-    }
-}
-
-// ===== Modal Functions =====
-function showModal(modalId) {
-    document.getElementById(modalId).classList.add('show');
-}
-
-function hideModal(modalId) {
-    document.getElementById(modalId).classList.remove('show');
-}
-
-// ===== Utility Functions =====
-function generateId() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function getStatusLabel(status) {
-    const labels = {
-        'planning': '計画中',
-        'active': '進行中',
-        'completed': '完了',
-        'on-hold': '保留',
-        'archived': 'アーカイブ'
-    };
-    return labels[status] || status;
-}
-
-function getTextPreview(text, maxLength = 150) {
-    let preview = text
-        .replace(/^#{1,6}\s+/gm, '')
-        .replace(/\*\*(.+?)\*\*/g, '$1')
-        .replace(/\*(.+?)\*/g, '$1')
-        .replace(/\[(.+?)\]\(.+?\)/g, '$1')
-        .replace(/`(.+?)`/g, '$1')
-        .replace(/^[-*+]\s+/gm, '')
-        .replace(/^\d+\.\s+/gm, '')
-        .replace(/^[-*]{3,}/gm, '')
-        .replace(/\n+/g, ' ')
-        .trim();
-
-    if (preview.length > maxLength) {
-        preview = preview.substring(0, maxLength) + '...';
-    }
-
-    return preview || 'プロジェクトの説明がありません';
-}
-
-function getWordCount(text) {
-    return text.length;
-}
-
-function formatDate(isoString) {
-    const date = new Date(isoString);
-    const now = new Date();
-    const diff = now - date;
-
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (minutes < 1) return 'たった今';
-    if (minutes < 60) return `${minutes}分前`;
-    if (hours < 24) return `${hours}時間前`;
-    if (days < 7) return `${days}日前`;
-
-    return date.toLocaleDateString('ja-JP', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-    });
-}
+function showModal(id) { document.getElementById(id).classList.add('show'); }
+function hideModal(id) { document.getElementById(id).classList.remove('show'); }
 
 function showNotification(message) {
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
+    const n = document.createElement('div');
+    n.style.cssText = `
+        position: fixed; top: 20px; right: 20px;
         background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 100%);
-        color: white;
-        padding: 1rem 1.5rem;
-        border-radius: 0.75rem;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-        z-index: 10000;
-        animation: slideIn 0.3s ease;
-        font-family: 'Inter', sans-serif;
-        font-weight: 500;
+        color: white; padding: 1rem 1.5rem; border-radius: 0.75rem;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); z-index: 10000;
+        animation: slideIn 0.3s ease; font-family: 'Inter', sans-serif; font-weight: 500;
     `;
-    notification.textContent = message;
-
-    document.body.appendChild(notification);
-
+    n.textContent = message;
+    document.body.appendChild(n);
     setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => {
-            document.body.removeChild(notification);
-        }, 300);
+        n.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => n.remove(), 300);
     }, 3000);
 }
 
-// Add animation styles
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideIn {
-        from {
-            opacity: 0;
-            transform: translateX(100px);
-        }
-        to {
-            opacity: 1;
-            transform: translateX(0);
-        }
-    }
-    @keyframes slideOut {
-        from {
-            opacity: 1;
-            transform: translateX(0);
-        }
-        to {
-            opacity: 0;
-            transform: translateX(100px);
-        }
-    }
+// CSS style for animation
+const styleSheet = document.createElement("style");
+styleSheet.innerText = `
+    @keyframes slideIn { from { opacity: 0; transform: translateX(100px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes slideOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100px); } }
+    .syncing-animation { animation: rotate 1s linear infinite; display: inline-block; }
+    @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 `;
-document.head.appendChild(style);
-
-// ===== Keyboard Shortcuts =====
-document.addEventListener('keydown', (e) => {
-    // Ctrl/Cmd + S to save
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        const editorView = document.getElementById('editorView');
-        if (editorView.classList.contains('active')) {
-            saveProject();
-        }
-    }
-
-    // Ctrl/Cmd + K to search
-    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        document.getElementById('searchInput').focus();
-    }
-
-    // Escape to close modals
-    if (e.key === 'Escape') {
-        document.querySelectorAll('.modal.show').forEach(modal => {
-            hideModal(modal.id);
-        });
-
-        // Close dropdowns
-        document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
-            menu.classList.remove('show');
-        });
-    }
-});
+document.head.appendChild(styleSheet);
