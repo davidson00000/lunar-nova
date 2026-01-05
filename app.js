@@ -39,12 +39,16 @@ async function initFirebase() {
     try {
         if (!window.firebase) {
             console.warn("Firebase SDK not found.");
+            showNotification('エラー: Firebase SDKが読み込まれていません');
             updateSyncButtonUI(false);
             return;
         }
 
-        // Initialize Firebase
-        firebase.initializeApp(defaultFirebaseConfig);
+        // Initialize Firebase if not already initialized
+        if (!firebase.apps.length) {
+            firebase.initializeApp(defaultFirebaseConfig);
+        }
+
         db = firebase.firestore();
         auth = firebase.auth();
 
@@ -52,14 +56,23 @@ async function initFirebase() {
         const manualUid = localStorage.getItem('lunar-nova-manual-uid');
 
         if (manualUid) {
-            // 手動IDを現在のユーザーとして扱う（認証は通さずドキュメントアクセスのみ）
             currentUser = { uid: manualUid };
             console.log("Using manual Sync ID:", manualUid);
         } else {
             // 新規匿名ログイン
-            const userCredential = await auth.signInAnonymously();
-            currentUser = userCredential.user;
-            console.log("Using anonymous ID:", currentUser.uid);
+            try {
+                const userCredential = await auth.signInAnonymously();
+                currentUser = userCredential.user;
+                console.log("Using anonymous ID:", currentUser.uid);
+            } catch (authError) {
+                if (authError.code === 'auth/operation-not-allowed') {
+                    showNotification('設定エラー: Firebaseコンソールで「匿名認証」を有効にしてください');
+                    alert('【重要】クラウド同期を使うには設定が必要です\n\nFirebaseコンソール > Authentication > Sign-in method\nで「匿名 (Anonymous)」を有効にしてください。');
+                } else {
+                    throw authError;
+                }
+                return;
+            }
         }
 
         isFirebaseInitialized = true;
@@ -69,6 +82,7 @@ async function initFirebase() {
 
     } catch (error) {
         console.error("Firebase initialization failed:", error);
+        showNotification(`初期化エラー: ${error.message}`);
         updateSyncButtonUI(false);
     }
 }
@@ -103,9 +117,14 @@ function initializeEventListeners() {
     document.getElementById('importFile').addEventListener('change', handleImport);
 
     // Firebase sync
-    document.getElementById('syncBtn').addEventListener('click', () => {
+    document.getElementById('syncBtn').addEventListener('click', async () => {
         if (!isFirebaseInitialized) {
-            initFirebase();
+            showNotification('クラウドに接続中...');
+            await initFirebase();
+            if (isFirebaseInitialized) {
+                showModal('firebaseModal');
+                updateSyncIdUI();
+            }
         } else {
             showModal('firebaseModal');
             updateSyncIdUI();
