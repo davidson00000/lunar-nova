@@ -459,7 +459,23 @@ function showEditor(project = null, editMode = false) {
         document.getElementById('projectTitle').value = '';
         document.getElementById('projectStatus').value = 'planning';
         document.getElementById('projectTags').value = '';
-        document.getElementById('markdownEditor').value = '';
+
+        // デフォルトテンプレートをセット
+        const template = `## プロジェクト概要
+ここにプロジェクトの目的や背景を記入してください。
+
+## 🎯 マイルストーン
+- [ ] マイルストーン 1
+- [ ] マイルストーン 2
+
+## 📝 タスク一覧
+- [ ] タスク A
+- [ ] タスク B
+
+## 📎 参考資料・リンク
+- [Lunar Nova Documentation](https://lunar-nova.vercel.app)`;
+
+        document.getElementById('markdownEditor').value = template;
     }
 
     updateEditorMode();
