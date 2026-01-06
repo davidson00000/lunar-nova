@@ -31,12 +31,14 @@
                 <!-- Document items will be injected here -->
             </div>
             <div class="sidebar-footer">
+                <button class="btn-icon" id="settingsBtn" title="Settings">⚙️</button>
                 <button class="btn-icon" id="syncBtn" title="Sync">☁️</button>
             </div>
         </aside>
 
         <!-- Main Content Area -->
         <main class="main-screen">
+            <!-- (省略) -->
             <!-- Header for Title (Minimal) -->
             <header class="doc-header">
                 <button class="btn-icon toggle-sidebar" id="toggleSidebar">☰</button>
@@ -89,7 +91,52 @@
         </div>
     </div>
 
-    <!-- Firebase SDKs -->
+    <!-- Config Modal -->
+    <div class="modal" id="configModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>VISUAL CONFIG</h3>
+                <button class="modal-close" id="closeConfig">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="bg-section">
+                    <label>FONT SIZE: <span id="val-fontSize">16px</span></label>
+                    <input type="range" id="cfg-fontSize" class="range-slider" min="12" max="24" step="1" value="16">
+                </div>
+
+                <div class="divider">:: THEME PRESETS ::</div>
+                <div class="theme-grid">
+                    <button class="theme-btn" data-theme="cyan" title="Cyber"
+                        style="--t-bg:#050505; --t-acc:#00ffcc"></button>
+                    <button class="theme-btn" data-theme="amber" title="Retro"
+                        style="--t-bg:#1a1505; --t-acc:#ffb000"></button>
+                    <button class="theme-btn" data-theme="green" title="Matrix"
+                        style="--t-bg:#051a05; --t-acc:#00ff33"></button>
+                    <button class="theme-btn" data-theme="mono" title="Paper"
+                        style="--t-bg:#f5f5f5; --t-acc:#222; border:1px solid #ccc"></button>
+                </div>
+
+                <div class="divider">:: CUSTOM COLORS ::</div>
+                <div class="color-row">
+                    <div class="color-input">
+                        <span>MAIN TXT</span>
+                        <input type="color" id="cfg-col-text">
+                    </div>
+                    <div class="color-input">
+                        <span>BACKGRND</span>
+                        <input type="color" id="cfg-col-bg">
+                    </div>
+                    <div class="color-input">
+                        <span>ACCENT</span>
+                        <input type="color" id="cfg-col-acc">
+                    </div>
+                </div>
+                <div class="action-row" style="margin-top:20px; text-align:right;">
+                    <button id="resetConfig" class="btn-text">RESET DEFAULTS</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>

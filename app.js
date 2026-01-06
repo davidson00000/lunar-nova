@@ -36,9 +36,70 @@ document.addEventListener('DOMContentLoaded', () => {
     els.emptyState = document.getElementById('emptyState');
 
     // Init Info
+    loadConfig(); // Load visuals first
     initEvents();
     initFirebase();
 });
+
+// ===== Config & Visuals =====
+let APP_CONFIG = {
+    fontSize: 16,
+    theme: {
+        bg: '#050505',
+        text: '#e0e0e0',
+        accent: '#00ffcc'
+    }
+};
+
+const THEMES = {
+    cyan: { bg: '#050505', text: '#e0e0e0', accent: '#00ffcc' },
+    amber: { bg: '#1a1505', text: '#ffb000', accent: '#ffb000' },
+    green: { bg: '#051a05', text: '#00ff33', accent: '#00ff33' },
+    mono: { bg: '#f5f5f5', text: '#222222', accent: '#000000' }
+};
+
+function loadConfig() {
+    const stored = localStorage.getItem('lunar-nova-config');
+    if (stored) {
+        APP_CONFIG = { ...APP_CONFIG, ...JSON.parse(stored) };
+    }
+    applyConfig();
+}
+
+function saveConfig() {
+    localStorage.setItem('lunar-nova-config', JSON.stringify(APP_CONFIG));
+}
+
+function applyConfig() {
+    const root = document.documentElement;
+    root.style.setProperty('--font-size-base', `${APP_CONFIG.fontSize}px`);
+
+    // Also scale headers relative to base
+    root.style.setProperty('--font-size-xl', `${APP_CONFIG.fontSize * 1.25}px`);
+    root.style.setProperty('--font-size-2xl', `${APP_CONFIG.fontSize * 1.5}px`);
+
+    root.style.setProperty('--bg-main', APP_CONFIG.theme.bg);
+    root.style.setProperty('--text-main', APP_CONFIG.theme.text);
+    root.style.setProperty('--accent', APP_CONFIG.theme.accent);
+
+    // Derived colors
+    // Need simple brightness check or just static derivates?
+    // For mono theme (light bg), panel should be slightly darker or border
+    // For dark themes, panel is slightly lighter.
+    // Simplifying: Panel is same as BG but we rely on opacity or borders.
+    // Let's just set panel same as bg for minimal look, rely on borders.
+    root.style.setProperty('--bg-panel', APP_CONFIG.theme.bg);
+
+    // Update input values in modal
+    document.getElementById('cfg-fontSize').value = APP_CONFIG.fontSize;
+    document.getElementById('val-fontSize').textContent = `${APP_CONFIG.fontSize}px`;
+    document.getElementById('cfg-col-bg').value = APP_CONFIG.theme.bg;
+    document.getElementById('cfg-col-text').value = APP_CONFIG.theme.text;
+    document.getElementById('cfg-col-acc').value = APP_CONFIG.theme.accent;
+}
+
+// ... (省略) ...
+
 
 // ===== Initialization & Sync =====
 async function initFirebase() {
@@ -309,5 +370,47 @@ function initEvents() {
         field.select();
         document.execCommand('copy');
         alert('COPIED');
+    });
+
+    // Settings Modal
+    const cfgModal = document.getElementById('configModal');
+    document.getElementById('settingsBtn').addEventListener('click', () => cfgModal.classList.add('show'));
+    document.getElementById('closeConfig').addEventListener('click', () => cfgModal.classList.remove('show'));
+
+    // Visual Controls
+    document.getElementById('cfg-fontSize').addEventListener('input', (e) => {
+        APP_CONFIG.fontSize = parseInt(e.target.value);
+        applyConfig();
+        saveConfig();
+    });
+
+    // Theme Presets
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const key = btn.dataset.theme;
+            if (THEMES[key]) {
+                APP_CONFIG.theme = { ...THEMES[key] };
+                applyConfig();
+                saveConfig();
+            }
+        });
+    });
+
+    // Custom Colors
+    ['cfg-col-bg', 'cfg-col-text', 'cfg-col-acc'].forEach(id => {
+        document.getElementById(id).addEventListener('input', (e) => {
+            const type = id.split('-')[2]; // bg, text, acc
+            const key = type === 'acc' ? 'accent' : type;
+            APP_CONFIG.theme[key] = e.target.value;
+            applyConfig();
+            saveConfig();
+        });
+    });
+
+    document.getElementById('resetConfig').addEventListener('click', () => {
+        APP_CONFIG.fontSize = 16;
+        APP_CONFIG.theme = { ...THEMES.cyan };
+        applyConfig();
+        saveConfig();
     });
 }
