@@ -223,16 +223,55 @@ function renderSidebar() {
         const div = document.createElement('div');
         div.className = 'doc-item';
         div.id = `doc-${p.id}`;
-        div.textContent = p.title || 'Untitled';
-        div.onclick = () => {
-            openProject(p.id);
-            // Mobile: Close sidebar on selection
-            if (window.innerWidth <= 768) {
-                els.sidebar.classList.remove('expanded');
+
+        // Setup inner HTML for title and delete button
+        const titleSpan = document.createElement('span');
+        titleSpan.textContent = p.title || 'Untitled';
+        titleSpan.className = 'doc-title-span';
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = '×';
+        deleteBtn.className = 'doc-delete-btn';
+        deleteBtn.title = 'Delete';
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation(); // Prevent opening the project
+            deleteProject(p.id);
+        };
+
+        div.appendChild(titleSpan);
+        div.appendChild(deleteBtn);
+
+        div.onclick = (e) => {
+            if (e.target !== deleteBtn) {
+                openProject(p.id);
+                if (window.innerWidth <= 768) {
+                    els.sidebar.classList.remove('expanded');
+                }
             }
         };
         els.docList.appendChild(div);
     });
+}
+
+function deleteProject(id) {
+    if (!confirm('Are you sure you want to delete this protocol?')) return;
+
+    const index = APP_STATE.projects.findIndex(p => p.id === id);
+    if (index === -1) return;
+
+    APP_STATE.projects.splice(index, 1);
+
+    // If we deleted the current project, switch to another
+    if (APP_STATE.currentId === id) {
+        if (APP_STATE.projects.length > 0) {
+            openProject(APP_STATE.projects[0].id);
+        } else {
+            createNewProject();
+        }
+    }
+
+    saveAll();
+    renderSidebar();
 }
 
 function renderPreview(markdown) {

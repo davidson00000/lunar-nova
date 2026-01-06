@@ -77,13 +77,57 @@ body {
     cursor: pointer;
     border-left: 2px solid transparent;
     color: var(--text-dim);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     transition: all 0.1s;
     text-align: center;
     /* when collapsed */
+
+    /* Layout for delete btn */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
+
+.doc-title-span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    pointer-events: none;
+    /* Let parent handle click */
+}
+
+.doc-delete-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0 5px;
+    opacity: 0;
+    transition: opacity 0.2s, color 0.2s;
+    font-size: 1.2rem;
+}
+
+.doc-delete-btn:hover {
+    color: #ff4444;
+    /* Standard alert color */
+}
+
+/* Show delete btn on hover or active */
+.doc-item:hover .doc-delete-btn,
+.doc-item.active .doc-delete-btn {
+    opacity: 1;
+}
+
+/* Mobile: always show delete button but subtle */
+@media (max-width: 768px) {
+    .doc-delete-btn {
+        opacity: 0.5;
+        padding: 0 10px;
+        /* Larger target */
+    }
+}
+
 
 .sidebar.expanded .doc-item {
     text-align: left;
