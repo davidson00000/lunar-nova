@@ -206,13 +206,13 @@ h3 {
 }
 
 h1 {
-    font-size: 2rem;
+    font-size: calc(var(--font-size-base) * 2);
     border-bottom: 1px solid var(--border);
     padding-bottom: 0.5rem;
 }
 
 h2 {
-    font-size: 1.5rem;
+    font-size: calc(var(--font-size-base) * 1.5);
     color: var(--accent);
 }
 
@@ -517,12 +517,12 @@ input[type="checkbox"] {
 
     /* Headings in content */
     h1 {
-        font-size: 1.6rem;
+        font-size: calc(var(--font-size-base) * 1.6);
         margin-top: 1.5rem;
     }
 
     h2 {
-        font-size: 1.3rem;
+        font-size: calc(var(--font-size-base) * 1.3);
     }
 
     /* Mode Switch - Optimize for touch */
