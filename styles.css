@@ -406,3 +406,35 @@ input[type="checkbox"] {
         width: 80%;
     }
 }
+/* Header Right */
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* Mode Switch Button */
+.mode-switch {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    padding: 0.3rem 0.8rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 80px;
+    text-align: center;
+}
+
+.mode-switch:hover {
+    color: var(--text-main);
+    border-color: var(--text-dim);
+}
+
+.mode-switch.active {
+    background: var(--bg-select);
+    color: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 5px rgba(0, 255, 204, 0.2);
+}

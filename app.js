@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     els.markdownEditor = document.getElementById('markdownEditor');
     els.docTitle = document.getElementById('docTitle');
     els.saveStatus = document.getElementById('saveStatus');
+    els.modeSwitch = document.getElementById('modeSwitch'); // Add to cache
     els.emptyState = document.getElementById('emptyState');
 
     // Init Info
@@ -130,6 +131,14 @@ function createNewProject() {
 }
 
 function openProject(id) {
+    // If clicking the already open project, just ensure we go back to preview mode
+    if (APP_STATE.currentId === id) {
+        if (APP_STATE.isEditorActive) {
+            switchMode('preview');
+        }
+        return;
+    }
+
     APP_STATE.currentId = id;
     const project = APP_STATE.projects.find(p => p.id === id);
     if (!project) return;
@@ -189,6 +198,10 @@ function switchMode(mode) {
         els.editorLayer.style.display = 'block';
         els.markdownEditor.focus();
         APP_STATE.isEditorActive = true;
+
+        // Update Switch Button
+        els.modeSwitch.textContent = 'EDITING';
+        els.modeSwitch.classList.add('active');
     } else {
         els.editorLayer.style.display = 'none';
         els.previewLayer.style.display = 'block';
@@ -204,10 +217,19 @@ function switchMode(mode) {
             saveAll();
         }
         APP_STATE.isEditorActive = false;
+
+        // Update Switch Button
+        els.modeSwitch.textContent = 'VIEW';
+        els.modeSwitch.classList.remove('active');
     }
 }
 
 function initEvents() {
+    // Mode Switch Button
+    els.modeSwitch.addEventListener('click', () => {
+        switchMode(APP_STATE.isEditorActive ? 'preview' : 'editor');
+    });
+
     // Double click to Edit
     els.previewLayer.addEventListener('dblclick', () => switchMode('editor'));
 
