@@ -191,6 +191,7 @@ body {
 .markdown-content {
     max-width: 800px;
     margin: 0 auto;
+    font-size: var(--font-size-base);
     line-height: 1.7;
     padding-bottom: 100px;
 }
