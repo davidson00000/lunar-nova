@@ -163,7 +163,13 @@ function renderSidebar() {
         div.className = 'doc-item';
         div.id = `doc-${p.id}`;
         div.textContent = p.title || 'Untitled';
-        div.onclick = () => openProject(p.id);
+        div.onclick = () => {
+            openProject(p.id);
+            // Mobile: Close sidebar on selection
+            if (window.innerWidth <= 768) {
+                els.sidebar.classList.remove('expanded');
+            }
+        };
         els.docList.appendChild(div);
     });
 }

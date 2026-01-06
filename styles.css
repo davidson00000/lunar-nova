@@ -438,3 +438,79 @@ input[type="checkbox"] {
     border-color: var(--accent);
     box-shadow: 0 0 5px rgba(0, 255, 204, 0.2);
 }
+
+/* ===== Mobile & Responsive Enhancements ===== */
+@media (max-width: 768px) {
+    /* Layout */
+    .app-layout {
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* Sidebar - Slide Overlay */
+    .sidebar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: 85%; /* Wider on mobile */
+        max-width: 300px;
+        transform: translateX(-100%);
+        box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+        z-index: 100;
+        background: var(--bg-main); /* Ensure opaque background */
+    }
+
+    .sidebar.expanded {
+        transform: translateX(0);
+        width: 85%;
+    }
+
+    /* Add overlay when sidebar opens */
+    .sidebar.expanded::before {
+        content: '';
+        position: fixed;
+        top: 0; left: 100%; /* Position right of sidebar */
+        width: 100vw; height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: block;
+        z-index: 99;
+    }
+
+    /* Main Screen */
+    .layer {
+        padding: 1rem 1.2rem; /* Reduce padding */
+    }
+
+    /* Header */
+    .doc-header {
+        padding: 0 0.8rem;
+        height: 56px;
+    }
+
+    .doc-title-input {
+        font-size: 0.9rem;
+    }
+
+    .toggle-sidebar {
+        padding: 0.5rem;
+        font-size: 1.4rem; /* Larger touch target */
+    }
+
+    /* Editor & Preview */
+    .markdown-content, 
+    #markdownEditor {
+        font-size: 16px; /* Prevent iOS zoom & better readability */
+        line-height: 1.6;
+    }
+
+    /* Headings in content */
+    h1 { font-size: 1.6rem; margin-top: 1.5rem; }
+    h2 { font-size: 1.3rem; }
+
+    /* Mode Switch - Optimize for touch */
+    .mode-switch {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.75rem;
+    }
+}
